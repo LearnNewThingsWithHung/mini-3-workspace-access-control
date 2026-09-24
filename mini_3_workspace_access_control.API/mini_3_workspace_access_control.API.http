@@ -1,0 +1,6 @@
+@mini_3_workspace_access_control.API_HostAddress = http://localhost:5095
+
+GET {{mini_3_workspace_access_control.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
