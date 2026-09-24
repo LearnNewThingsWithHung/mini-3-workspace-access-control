@@ -14,9 +14,9 @@ using JwtService = mini_3_workspace_access_control.Service.JwtService;
     builder.Services.AddEndpointsApiExplorer();
 
     builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseNpgsql(
-            builder.Configuration.GetConnectionString("DefaultConnection")
-        )
+        options
+            .UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+            .UseSnakeCaseNamingConvention()
     );
 
     builder.Services.ConfigureRateLimiter();
