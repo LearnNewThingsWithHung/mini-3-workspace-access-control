@@ -1,8 +1,8 @@
 ﻿namespace mini_3_workspace_access_control.Repo.Abstraction;
 
-public abstract class BaseEntity<Tkey>
+public abstract class BaseEntity<TKey>
 {
-    public Tkey Id { get; set; }
+    public required TKey Id { get; set; } 
     
     public bool IsDeleted  { get; set; }
 }
