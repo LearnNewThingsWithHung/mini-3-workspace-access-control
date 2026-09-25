@@ -5,6 +5,7 @@ using mini_3_workspace_access_control.Repo;
 using Microsoft.EntityFrameworkCore;
 using MailService = mini_3_workspace_access_control.Service.MailService;
 using JwtService = mini_3_workspace_access_control.Service.JwtService;
+using PersonAccess = mini_3_workspace_access_control.Service.PersonAccess;
 
 
     var builder = WebApplication.CreateBuilder(args);
@@ -26,6 +27,7 @@ using JwtService = mini_3_workspace_access_control.Service.JwtService;
 
     builder.Services.AddScoped<MailService.IService, MailService.Service>();
     builder.Services.AddScoped<JwtService.IService, JwtService.Service>();
+    builder.Services.AddScoped<PersonAccess.IService, PersonAccess.Service>();
     builder.Services.AddTransient<GlobalExceptionHandlerMiddleware>();
 
     //builder.Services.AddValidatorsFromAssembly(AssemblyReference.Assembly);

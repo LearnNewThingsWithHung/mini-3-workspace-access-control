@@ -20,3 +20,15 @@ public class ExpiredRefreshTokenException : AppException
         : base("Unauthorized",401,  "EXPIRED_REFRESH_TOKEN", 
             "Refresh token has expired. Please login again.") { }
 }
+
+public class DemoPersonUnauthorizedException : AppException
+{
+    public DemoPersonUnauthorizedException()
+        : base(
+            "Unauthorized",
+            401,
+            "DEMO_PERSON_REQUIRED",
+            "X-Demo-Person-Id is missing, invalid, inactive, or does not identify a person.")
+    {
+    }
+}
