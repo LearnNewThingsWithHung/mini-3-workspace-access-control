@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using mini_3_workspace_access_control.Repo.Configurations.Seed;
 using mini_3_workspace_access_control.Repo.Entity;
 
 namespace mini_3_workspace_access_control.Repo.Configurations;
@@ -23,5 +24,7 @@ public sealed class PersonConfiguration : IEntityTypeConfiguration<Person>
 
         builder.HasIndex(x => x.Email).IsUnique().HasDatabaseName("ux_people_email");
         builder.HasQueryFilter(x => !x.IsDeleted);
+
+        builder.HasData(PersonSeed.Data);
     }
 }
