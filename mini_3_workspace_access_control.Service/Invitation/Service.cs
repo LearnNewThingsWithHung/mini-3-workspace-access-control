@@ -177,6 +177,112 @@ public class Service: IService
 
     }
 
+    public async Task<Response.AcceptInvitationResponse> AcceptInvitation(Request.AcceptInvitationRequest request, Guid currentPersonId, CancellationToken ct)
+    {
+
+        if (string.IsNullOrWhiteSpace(request.Token))
+        {
+            throw new Exception("Token is required.");
+        }
+        
+        var rawToken = request.Token.Trim();
+        var tokenHa = HashInvitationToken(rawToken);
+        var now = DateTimeOffset.UtcNow;
+        
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
+
+        var invitation = await _dbContext.WorkspaceInvitations
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.TokenHash == request.Token, ct);
+
+        if (invitation is null)
+        {
+            throw new Exception("Inviatation token is invalid.");
+        }
+        
+        if (invitation.Status != InvitationStatus.Pending)
+        {
+            throw invitation.Status switch
+            {
+                InvitationStatus.Accepted =>
+                    new Exception("Invitation has already been accepted."),
+
+                InvitationStatus.Expired =>
+                    new Exception("Invitation has expired."),
+
+                InvitationStatus.Revoked =>
+                    new Exception("Invitation has been revoked."),
+
+                _ => new Exception("Invitation is not available.")
+            };
+        }
+
+        if (invitation.ExpiresAt <= now)
+        {
+            throw new Exception("Invitation has expired.");
+        }
+        
+        var currentPerson = await _dbContext.People
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == currentPersonId &&
+                x.IsActive, ct);
+        
+        if (currentPerson is null)
+            throw new Exception("Current person does not exist or is inactive.");
+
+        if (!string.Equals(
+                currentPerson.Email,
+                invitation.Email,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new Exception(
+                "This invitation belongs to another email address.");
+        }
+
+        var alreadyMember = await _dbContext.WorkspaceMembers
+            .AnyAsync(x =>
+                    x.WorkspaceId == invitation.WorkspaceId &&
+                    x.PersonId == currentPersonId,
+                ct);
+
+        if (alreadyMember)
+            throw new Exception(
+                "Current person is already a member of this workspace.");
+        
+        var member = new WorkspaceMember
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = invitation.WorkspaceId,
+            PersonId = currentPersonId,
+            Role = invitation.Role
+        };
+
+        invitation.Status = InvitationStatus.Accepted;
+        invitation.AcceptedAt = now;
+
+        _dbContext.WorkspaceMembers.Add(member);
+
+        await _dbContext.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+
+        return new Response.AcceptInvitationResponse
+        {
+            InvitationId = invitation.Id,
+            WorkspaceId = invitation.WorkspaceId,
+            PersonId = currentPersonId,
+            Role = member.Role.ToString(),
+            AcceptedAt = now
+        };
+    }
+
+    private static string HashInvitationToken(string rawToken)
+    {
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(rawToken));
+        
+        return Convert.ToHexString(hashBytes)
+            .ToLowerInvariant();
+    }
+    
     private static (string RawToken, string TokenHash) CreateInvitationToken()
     {
         var randomBytes = RandomNumberGenerator.GetBytes(32);

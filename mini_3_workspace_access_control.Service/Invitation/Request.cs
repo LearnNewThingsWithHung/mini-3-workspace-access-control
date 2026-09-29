@@ -11,4 +11,9 @@ public class Request
         public string Email { get; set; } = null!;
         public WorkspaceRole Role { get; set; }
     }
+    
+    public class AcceptInvitationRequest
+    {
+        public string Token { get; set; } = null!;
+    }
 }

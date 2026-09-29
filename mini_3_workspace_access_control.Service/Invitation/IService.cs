@@ -7,4 +7,6 @@ public interface IService
     Task<Response.CreateInvitationResponse> CreateInvitation(Request.CreateInvitationRequest request, CancellationToken ct);
     Task<BasePaginationResponse> GetInvitation(
         Guid workspaceId, Guid currentPersonId, int pageSize, int pageIndex, CancellationToken ct);
+    Task<Response.AcceptInvitationResponse> AcceptInvitation(
+        Request.AcceptInvitationRequest request, Guid currentPersonId,CancellationToken ct);
 } 

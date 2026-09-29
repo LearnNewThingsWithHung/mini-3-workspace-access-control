@@ -9,7 +9,7 @@ namespace mini_3_workspace_access_control.API.Controller;
 [Route("api/people")]
 public sealed class PersonController : ControllerBase
 {
-
+    private const string DemoPersonHeader = "X-Demo-Person-Id";
     private readonly PersonAccess.IService _people;
 
     public PersonController(PersonAccess.IService people)
@@ -18,10 +18,23 @@ public sealed class PersonController : ControllerBase
     }
 
     [HttpGet("me")]
-    public async Task<IActionResult> GetMe(Guid personId, CancellationToken ct)
+    public async Task<IActionResult> GetMe(CancellationToken ct)
     {
+        var personId = GetCurrentPersonId();
         var person = await _people.GetMeAsync(personId, ct);
 
-        return Ok(ApiResponseFactory.Base(person, traceId: HttpContext.TraceIdentifier));
+        return Ok(ApiResponseFactory.Base(
+            person,
+            traceId: HttpContext.TraceIdentifier));
+    }
+
+    private Guid GetCurrentPersonId()
+    {
+        var value = Request.Headers[DemoPersonHeader].FirstOrDefault();
+
+        if (!Guid.TryParse(value, out var personId) || personId == Guid.Empty)
+            throw new DemoPersonUnauthorizedException();
+
+        return personId;
     }
 }
