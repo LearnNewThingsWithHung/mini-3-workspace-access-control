@@ -28,11 +28,17 @@ public sealed class WorkspaceInvitationConfiguration : IEntityTypeConfiguration<
             .IsRequired();
         builder.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
         builder.Property(x => x.IsDeleted).HasDefaultValue(false).IsRequired();
-
+        
+        builder.Property(x => x.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(InvitationStatus.Pending)
+            .IsRequired();
+        
         builder.HasIndex(x => x.TokenHash).IsUnique().HasDatabaseName("ux_workspace_invitations_token_hash");
         builder.HasIndex(x => new { x.WorkspaceId, x.Email })
             .IsUnique()
-            .HasFilter("accepted_at IS NULL AND is_deleted = false")
+            .HasFilter("status = 'Pending' AND is_deleted = false")
             .HasDatabaseName("ux_workspace_invitations_active_workspace_email");
 
         builder.HasOne(x => x.Workspace)

@@ -20,7 +20,6 @@
     <ItemGroup>
       <Folder Include="Configurations\Seed\" />
       <Folder Include="Entity\" />
-      <Folder Include="Enum\" />
     </ItemGroup>
 
 </Project>

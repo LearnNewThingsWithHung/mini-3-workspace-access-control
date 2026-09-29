@@ -8,7 +8,9 @@ public class WorkspaceInvitation : BaseEntity<Guid>, IAuditableEntity
     public Guid WorkspaceId { get; set; }
 
     public string Email { get; set; } = null!;
-
+    
+    public InvitationStatus Status { get; set; }
+    
     public WorkspaceRole Role { get; set; } = WorkspaceRole.Viewer;
 
     public string TokenHash { get; set; } = null!;
