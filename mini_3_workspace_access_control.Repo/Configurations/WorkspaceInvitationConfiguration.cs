@@ -40,6 +40,10 @@ public sealed class WorkspaceInvitationConfiguration : IEntityTypeConfiguration<
             .IsUnique()
             .HasFilter("status = 'Pending' AND is_deleted = false")
             .HasDatabaseName("ux_workspace_invitations_active_workspace_email");
+        
+        builder.HasIndex(x => x.ExpiresAt)
+            .HasFilter("status = 'Expired' AND is_deleted = false")
+            .HasDatabaseName("ix_workspace_invitations_pending_expires_at");
 
         builder.HasOne(x => x.Workspace)
             .WithMany(x => x.Invitations)

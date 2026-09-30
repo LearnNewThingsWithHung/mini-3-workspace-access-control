@@ -1,8 +1,11 @@
 using System.Reflection.Metadata;
+using FluentValidation;
 using mini_3_workspace_access_control.API.Extensions;
 using mini_3_workspace_access_control.API.Middleware;
 using mini_3_workspace_access_control.Repo;
 using Microsoft.EntityFrameworkCore;
+using mini_3_workspace_access_control.Service.BackgroundJobService;
+using Quartz;
 using MailService = mini_3_workspace_access_control.Service.MailService;
 using JwtService = mini_3_workspace_access_control.Service.JwtService;
 using PersonAccess = mini_3_workspace_access_control.Service.PersonAccess;
@@ -38,6 +41,26 @@ using InvitationService = mini_3_workspace_access_control.Service.Invitation;
 
     //builder.Services.AddValidatorsFromAssembly(AssemblyReference.Assembly);
 
+    var expireInvitationJobKey = new JobKey(nameof(ExpireWorkspaceInvitationsJob));
+
+    builder.Services.AddQuartz(options =>
+    {
+        options.AddJob<ExpireWorkspaceInvitationsJob>(x => x.WithIdentity(expireInvitationJobKey));
+        options.AddTrigger(x => x
+            .ForJob(expireInvitationJobKey)
+            .WithIdentity(
+                $"{nameof(ExpireWorkspaceInvitationsJob)}-trigger")
+            .StartNow()
+            .WithSimpleSchedule(x => x
+                .WithIntervalInMinutes(1)
+                .RepeatForever()));
+    });
+
+    builder.Services.AddQuartzHostedService(x =>
+    {
+        x.WaitForJobsToComplete = true;
+    });
+    
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("AllowFrontend", policy =>
