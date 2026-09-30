@@ -478,3 +478,4 @@ mini_3_workspace_access_control.Api/appsettings.Development.json
 !.docker/.env.sample
 .env
 .claude/
+mini_3_workspace_access_control.API/Document/
