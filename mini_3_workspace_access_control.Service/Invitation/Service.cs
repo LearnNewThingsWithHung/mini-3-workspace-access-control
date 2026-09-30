@@ -88,6 +88,9 @@ public class Service: IService
             CreatedByPersonId = request.CurrentPersonId,
         };
         
+        _dbContext.WorkspaceInvitations.Add(invitation);
+        await _dbContext.SaveChangesAsync(ct);
+        
         var acceptUrl =
             $"http://localhost:5173/invitations/accept" +
             $"?token={Uri.EscapeDataString(rawToken)}";
@@ -104,9 +107,7 @@ public class Service: IService
                     """
 
         });
-            
-        _dbContext.WorkspaceInvitations.Add(invitation);
-        await _dbContext.SaveChangesAsync(ct);
+        
         
         return new Response.CreateInvitationResponse
         {

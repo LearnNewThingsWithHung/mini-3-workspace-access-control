@@ -218,6 +218,8 @@ public class Service: IService
 
         membership.Workspace.IsDeleted = true;
         
+        await _dbContext.SaveChangesAsync(ct);
+        
     }
 
 
