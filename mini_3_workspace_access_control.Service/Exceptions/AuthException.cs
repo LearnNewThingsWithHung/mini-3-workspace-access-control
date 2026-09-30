@@ -28,7 +28,7 @@ public class DemoPersonUnauthorizedException : AppException
             "Unauthorized",
             401,
             "DEMO_PERSON_REQUIRED",
-            "X-Demo-Person-Id is missing, invalid, inactive, or does not identify a person.")
+            "The demo person id is missing, invalid, inactive, or does not identify a person.")
     {
     }
 }

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using mini_3_workspace_access_control.Repo;
 using mini_3_workspace_access_control.Repo.Enum;
+using mini_3_workspace_access_control.Service.Exceptions;
 
 namespace mini_3_workspace_access_control.Service.WorkSpaceMember;
 
@@ -20,7 +21,7 @@ public class Service: IService
                            && x.PersonId == currentPersonId, ct);
 
         if (!isMember)
-            throw new Exception($"Workspace member {workspaceId} not found");
+            throw new NotFoundException("WORKSPACE_NOT_FOUND", "Workspace was not found.");
 
         return await _dbContext.WorkspaceMembers
             .AsNoTracking()
@@ -45,10 +46,10 @@ public class Service: IService
                 x.PersonId == currentPersonId, ct);
 
         if (currentMember is null)
-            throw new Exception($"Workspace member {workspaceId} not found");
+            throw new NotFoundException("WORKSPACE_NOT_FOUND", "Workspace was not found.");
 
         if (currentMember.Role is not (WorkspaceRole.Owner or WorkspaceRole.Manager))
-            throw new Exception($"Workspace member {workspaceId} is not owner");
+            throw new ForbiddenException("MEMBER_ROLE_UPDATE_FORBIDDEN", "Only the Owner or a Manager can update member roles.");
 
         var targetMember = await _dbContext.WorkspaceMembers
             .Include(x => x.Person)
@@ -57,14 +58,16 @@ public class Service: IService
                 x.PersonId == targetPersonId, ct);
 
         if (targetMember is null)
-            throw new Exception("Person not found int this workspace");
+            throw new NotFoundException("WORKSPACE_MEMBER_NOT_FOUND", "The member was not found in this workspace.");
 
         if (targetMember.Role == WorkspaceRole.Owner)//mất owner cho that workspace
-            throw new Exception("Không thể đổi role Owner tại đây. Hãy dùng ownership transfer.");
+            throw new BadRequestException("OWNER_ROLE_REQUIRES_TRANSFER", "The Owner role must be changed through ownership transfer.");
 
-        if (currentMember.Role == WorkspaceRole.Manager &&
-            requestedRole == WorkspaceRole.Owner)
-            throw new Exception("Không có quyền đổi từ Manager -> Onwer");
+        if (!Enum.IsDefined(requestedRole))
+            throw new BadRequestException("INVALID_WORKSPACE_ROLE", "The requested workspace role is invalid.");
+
+        if (requestedRole == WorkspaceRole.Owner)
+            throw new BadRequestException("OWNER_ROLE_REQUIRES_TRANSFER", "The Owner role can only be assigned through ownership transfer.");
 
         targetMember.Role = requestedRole;
 
@@ -89,13 +92,13 @@ public class Service: IService
                 x.PersonId == currentPersonId, ct);
 
         if (currentMember is null)
-            throw new Exception("Member is not in this workspace");
+            throw new NotFoundException("WORKSPACE_NOT_FOUND", "Workspace was not found.");
 
         if (currentMember.Role is not (WorkspaceRole.Owner or WorkspaceRole.Manager))
-            throw new Exception("You have to owner or manager role");
+            throw new ForbiddenException("MEMBER_REMOVE_FORBIDDEN", "Only the Owner or a Manager can remove members.");
 
         if (targetPersonId == currentPersonId)
-            throw new Exception("Không thể tự rời workspace bằng API này.");
+            throw new BadRequestException("SELF_REMOVE_NOT_ALLOWED", "You cannot leave the workspace through this administration endpoint.");
 
         var targetMember = await _dbContext.WorkspaceMembers
             .SingleOrDefaultAsync(x =>
@@ -103,12 +106,12 @@ public class Service: IService
                 x.PersonId == targetPersonId, ct);
 
         if (targetMember is null)
-            throw new Exception("Member is not in this workspace");
+            throw new NotFoundException("WORKSPACE_MEMBER_NOT_FOUND", "The member was not found in this workspace.");
 
         if (targetMember.Role == WorkspaceRole.Owner)
-            throw new Exception("Không thể xóa Owner. Hãy chuyển quyền sở hữu trước.");
+            throw new BadRequestException("OWNER_REMOVE_NOT_ALLOWED", "Transfer ownership before removing the current Owner.");
 
-        _dbContext.WorkspaceMembers.Remove(targetMember);
+        targetMember.IsDeleted = true;
         await _dbContext.SaveChangesAsync(ct);
     }
 
@@ -120,10 +123,10 @@ public class Service: IService
         CancellationToken ct = default)
     {
         if (newOwnerPersonId == currentPersonId)
-            throw new Exception("Bạn đã là Owner hiện tại.");
+            throw new BadRequestException("NEW_OWNER_IS_CURRENT_OWNER", "The selected person is already the current Owner.");
 
-        if (previousOwnerRole == WorkspaceRole.Owner)
-            throw new Exception("Previous owner cannot remain Owner after ownership transfer.");
+        if (!Enum.IsDefined(previousOwnerRole) || previousOwnerRole == WorkspaceRole.Owner)
+            throw new BadRequestException("INVALID_PREVIOUS_OWNER_ROLE", "The previous Owner must become Manager, Editor, or Viewer.");
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
 
@@ -133,10 +136,10 @@ public class Service: IService
                 x.PersonId == currentPersonId, ct);
 
         if (currentOwner is null)
-            throw new Exception("Current user is not in this workspace");
+            throw new NotFoundException("WORKSPACE_NOT_FOUND", "Workspace was not found.");
 
         if (currentOwner.Role != WorkspaceRole.Owner)
-            throw new Exception("Just owner can able to use this API");
+            throw new ForbiddenException("OWNERSHIP_TRANSFER_FORBIDDEN", "Only the current Owner can transfer ownership.");
 
         var newOwner = await _dbContext.WorkspaceMembers
             .SingleOrDefaultAsync(x =>
@@ -144,7 +147,7 @@ public class Service: IService
                 x.PersonId == newOwnerPersonId, ct);
 
         if (newOwner is null)
-            throw new Exception("Current user is not in this workspace");
+            throw new NotFoundException("NEW_OWNER_NOT_FOUND", "The new Owner must already be a member of this workspace.");
         
         currentOwner.Role = previousOwnerRole;
         newOwner.Role = WorkspaceRole.Owner;

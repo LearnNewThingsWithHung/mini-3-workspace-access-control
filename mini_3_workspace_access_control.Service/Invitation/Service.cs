@@ -2,10 +2,10 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Query.Internal;
 using mini_3_workspace_access_control.Repo;
 using mini_3_workspace_access_control.Repo.Entity;
 using mini_3_workspace_access_control.Repo.Enum;
+using mini_3_workspace_access_control.Service.Exceptions;
 using mini_3_workspace_access_control.Service.Models;
 using mini_3_workspace_access_control.Service.Utils;
 
@@ -25,30 +25,39 @@ public class Service: IService
     public async Task<Response.CreateInvitationResponse> CreateInvitation(Request.CreateInvitationRequest request, CancellationToken ct)
     {
         
+        if (string.IsNullOrWhiteSpace(request.Email))
+            throw new BadRequestException("INVITATION_EMAIL_REQUIRED", "Invitation email is required.");
+
         var email = request.Email.Trim().ToLowerInvariant();
+
+        if (!MailAddress.TryCreate(email, out var parsedEmail) ||
+            !string.Equals(parsedEmail.Address, email, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BadRequestException("INVALID_INVITATION_EMAIL", "Invitation email is invalid.");
+        }
         
         if(!Enum.IsDefined(request.Role))
-            throw new Exception("Invalid role");
+            throw new BadRequestException("INVALID_WORKSPACE_ROLE", "The requested workspace role is invalid.");
         
-        var inventer = await _dbContext.WorkspaceMembers
+        var inviter = await _dbContext.WorkspaceMembers
             .AsNoTracking()
             .FirstOrDefaultAsync(x => 
                 x.PersonId == request.CurrentPersonId  &&
                 x.WorkspaceId == request.WorkspaceId, ct);
 
-        if (inventer == null)
+        if (inviter == null)
         {
-            throw new Exception($"Member {request.CurrentPersonId} does not exist in this workspace");
+            throw new NotFoundException("WORKSPACE_NOT_FOUND", "Workspace was not found.");
         }
 
-        if (!inventer.Role.Covers(WorkspaceRole.Manager))
+        if (!inviter.Role.Covers(WorkspaceRole.Manager))
         {
-            throw new Exception("Only Owner or Manager can create invitation");
+            throw new ForbiddenException("INVITATION_CREATE_FORBIDDEN", "Only the Owner or a Manager can create invitations.");
         }
 
         if (!WorkspaceRole.Manager.Covers(request.Role))
         {
-            throw new Exception("An invitation cannot assign the Owner role");
+            throw new BadRequestException("OWNER_INVITATION_NOT_ALLOWED", "An invitation cannot assign the Owner role.");
         }
         
         var alreadyMember = await _dbContext.WorkspaceMembers
@@ -58,7 +67,7 @@ public class Service: IService
 
         if (alreadyMember)
         {
-            throw new Exception($"Member {request.CurrentPersonId} already existed in this workspace");
+            throw new ConflictException("WORKSPACE_MEMBER_ALREADY_EXISTS", $"{email} is already a member of this workspace.");
         }        
         
         var pendingInvitationExist = await _dbContext.WorkspaceInvitations
@@ -71,7 +80,7 @@ public class Service: IService
 
         if (pendingInvitationExist)
         {
-            throw new Exception($"A pending invitation with the email {email} already exists");
+            throw new ConflictException("PENDING_INVITATION_ALREADY_EXISTS", $"A pending invitation already exists for {email}.");
         }
 
         var (rawToken, tokenHash) = CreateInvitationToken();
@@ -127,10 +136,10 @@ public class Service: IService
     {
         
         if (pageIndex < 1)
-            throw new Exception("Page index must be greater than or equal to 1.");
+            throw new BadRequestException("INVALID_PAGE_INDEX", "Page index must be greater than or equal to 1.");
 
         if (pageSize < 1 || pageSize > 100)
-            throw new Exception("Page size must be between 1 and 100.");
+            throw new BadRequestException("INVALID_PAGE_SIZE", "Page size must be between 1 and 100.");
         
         var currentMember = await _dbContext.WorkspaceMembers
             .AsNoTracking()
@@ -139,12 +148,12 @@ public class Service: IService
 
         if (currentMember is null)
         {
-            throw new Exception("Current person is not a member of this workspace");
+            throw new NotFoundException("WORKSPACE_NOT_FOUND", "Workspace was not found.");
         }
 
         if (!currentMember.Role.Covers(WorkspaceRole.Manager))
         {
-            throw new Exception("Only Owner or Manager can seen invited");
+            throw new ForbiddenException("INVITATION_LIST_FORBIDDEN", "Only the Owner or a Manager can view invitations.");
         }
 
         var invitationQuery = _dbContext.WorkspaceInvitations
@@ -183,22 +192,21 @@ public class Service: IService
 
         if (string.IsNullOrWhiteSpace(request.Token))
         {
-            throw new Exception("Token is required.");
+            throw new BadRequestException("INVITATION_TOKEN_REQUIRED", "Invitation token is required.");
         }
         
         var rawToken = request.Token.Trim();
-        var tokenHa = HashInvitationToken(rawToken);
+        var tokenHash = HashInvitationToken(rawToken);
         var now = DateTimeOffset.UtcNow;
         
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
 
         var invitation = await _dbContext.WorkspaceInvitations
-            .AsNoTracking()
-            .SingleOrDefaultAsync(x => x.TokenHash == request.Token, ct);
+            .SingleOrDefaultAsync(x => x.TokenHash == tokenHash, ct);
 
         if (invitation is null)
         {
-            throw new Exception("Inviatation token is invalid.");
+            throw new BadRequestException("INVALID_INVITATION_TOKEN", "Invitation token is invalid.");
         }
         
         if (invitation.Status != InvitationStatus.Pending)
@@ -206,21 +214,21 @@ public class Service: IService
             throw invitation.Status switch
             {
                 InvitationStatus.Accepted =>
-                    new Exception("Invitation has already been accepted."),
+                    new ConflictException("INVITATION_ALREADY_ACCEPTED", "Invitation has already been accepted."),
 
                 InvitationStatus.Expired =>
-                    new Exception("Invitation has expired."),
+                    new GoneException("INVITATION_EXPIRED", "Invitation has expired."),
 
                 InvitationStatus.Revoked =>
-                    new Exception("Invitation has been revoked."),
+                    new GoneException("INVITATION_REVOKED", "Invitation has been revoked."),
 
-                _ => new Exception("Invitation is not available.")
+                _ => new ConflictException("INVITATION_UNAVAILABLE", "Invitation is not available.")
             };
         }
 
         if (invitation.ExpiresAt <= now)
         {
-            throw new Exception("Invitation has expired.");
+            throw new GoneException("INVITATION_EXPIRED", "Invitation has expired.");
         }
         
         var currentPerson = await _dbContext.People
@@ -229,14 +237,15 @@ public class Service: IService
                 x.IsActive, ct);
         
         if (currentPerson is null)
-            throw new Exception("Current person does not exist or is inactive.");
+            throw new DemoPersonUnauthorizedException();
 
         if (!string.Equals(
                 currentPerson.Email,
                 invitation.Email,
                 StringComparison.OrdinalIgnoreCase))
         {
-            throw new Exception(
+            throw new ForbiddenException(
+                "INVITATION_EMAIL_MISMATCH",
                 "This invitation belongs to another email address.");
         }
 
@@ -247,7 +256,8 @@ public class Service: IService
                 ct);
 
         if (alreadyMember)
-            throw new Exception(
+            throw new ConflictException(
+                "WORKSPACE_MEMBER_ALREADY_EXISTS",
                 "Current person is already a member of this workspace.");
         
         var member = new WorkspaceMember
@@ -293,11 +303,7 @@ public class Service: IService
                 .Replace('+', '-')
                 .Replace('/', '_');
         
-        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(rawToken));
-
-        var tokenHash = Convert
-            .ToHexString(hashBytes)
-            .ToLowerInvariant();
+        var tokenHash = HashInvitationToken(rawToken);
         
         return(rawToken, tokenHash);
     }

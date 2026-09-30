@@ -17,13 +17,21 @@ public sealed class PersonController : ControllerBase
     }
 
     [HttpGet("me")]
-    public async Task<IActionResult> GetMe(Guid personId, CancellationToken ct)
+    public async Task<IActionResult> GetMe(
+        [FromQuery] Guid currentPersonId,
+        CancellationToken ct)
     {
-        var person = await _people.GetMeAsync(personId, ct);
+        EnsureValidDemoPersonId(currentPersonId);
+        var person = await _people.GetMeAsync(currentPersonId, ct);
 
         return Ok(ApiResponseFactory.Base(
             person,
             traceId: HttpContext.TraceIdentifier));
     }
-    
+
+    private static void EnsureValidDemoPersonId(Guid currentPersonId)
+    {
+        if (currentPersonId == Guid.Empty)
+            throw new DemoPersonUnauthorizedException();
+    }
 }

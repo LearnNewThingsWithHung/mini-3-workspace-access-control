@@ -22,15 +22,8 @@ public class Service: IService
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == personId, ct);
 
-        if (person == null)
-        {
-            throw new Exception("Person not found");
-        }
-
-        if (!person.IsActive)
-        {
-            throw new Exception("Person is not active");
-        }
+        if (person == null || !person.IsActive)
+            throw new DemoPersonUnauthorizedException();
 
         return new Response.AccessPersonResponse
         {

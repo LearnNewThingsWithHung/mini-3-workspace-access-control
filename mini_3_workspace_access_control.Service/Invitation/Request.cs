@@ -16,4 +16,10 @@ public class Request
     {
         public string Token { get; set; } = null!;
     }
+
+    public class CreateWorkspaceInvitationBody
+    {
+        public string Email { get; set; } = null!;
+        public WorkspaceRole Role { get; set; }
+    }
 }

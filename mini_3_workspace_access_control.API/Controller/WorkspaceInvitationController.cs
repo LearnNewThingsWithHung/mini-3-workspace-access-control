@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using mini_3_workspace_access_control.Repo.Enum;
 using mini_3_workspace_access_control.Service.Exceptions;
 using mini_3_workspace_access_control.Service.Models;
 using InvitationService = mini_3_workspace_access_control.Service.Invitation;
@@ -10,7 +9,6 @@ namespace mini_3_workspace_access_control.API.Controller;
 [Route("api")]
 public sealed class WorkspaceInvitationController : ControllerBase
 {
-    private const string DemoPersonHeader = "X-Demo-Person-Id";
     private readonly InvitationService.IService _invitations;
 
     public WorkspaceInvitationController(InvitationService.IService invitations)
@@ -21,10 +19,12 @@ public sealed class WorkspaceInvitationController : ControllerBase
     [HttpPost("workspaces/{workspaceId:guid}/invitations")]
     public async Task<IActionResult> Create(
         Guid workspaceId,
-        [FromBody] InvitationService.Response.CreateWorkspaceInvitationBody body,
+        [FromQuery] Guid currentPersonId,
+        [FromBody] InvitationService.Request.CreateWorkspaceInvitationBody body,
         CancellationToken ct)
     {
-        var currentPersonId = GetCurrentPersonId();
+        EnsureValidDemoPersonId(currentPersonId);
+
         var request = new InvitationService.Request.CreateInvitationRequest
         {
             WorkspaceId = workspaceId,
@@ -43,11 +43,13 @@ public sealed class WorkspaceInvitationController : ControllerBase
     [HttpGet("workspaces/{workspaceId:guid}/invitations")]
     public async Task<IActionResult> GetInvitations(
         Guid workspaceId,
+        [FromQuery] Guid currentPersonId,
         [FromQuery] int pageIndex = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
     {
-        var currentPersonId = GetCurrentPersonId();
+        EnsureValidDemoPersonId(currentPersonId);
+
         var result = await _invitations.GetInvitation(
             workspaceId,
             currentPersonId,
@@ -63,23 +65,20 @@ public sealed class WorkspaceInvitationController : ControllerBase
 
     [HttpPost("invitations/accept")]
     public async Task<IActionResult> Accept(
+        [FromQuery] Guid currentPersonId,
         [FromBody] InvitationService.Request.AcceptInvitationRequest request,
         CancellationToken ct)
     {
-        var currentPersonId = GetCurrentPersonId();
+        EnsureValidDemoPersonId(currentPersonId);
+
         var result = await _invitations.AcceptInvitation(request, currentPersonId, ct);
 
         return Ok(ApiResponseFactory.Base(result, traceId: HttpContext.TraceIdentifier));
     }
 
-    private Guid GetCurrentPersonId()
+    private static void EnsureValidDemoPersonId(Guid currentPersonId)
     {
-        var value = Request.Headers[DemoPersonHeader].FirstOrDefault();
-
-        if (!Guid.TryParse(value, out var personId) || personId == Guid.Empty)
+        if (currentPersonId == Guid.Empty)
             throw new DemoPersonUnauthorizedException();
-
-        return personId;
     }
 }
-

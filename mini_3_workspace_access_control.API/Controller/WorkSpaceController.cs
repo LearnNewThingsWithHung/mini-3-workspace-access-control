@@ -24,9 +24,10 @@ public sealed class WorkSpaceController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] WorkspaceService.Request.CreateWorkSpaceRequest request,
-        Guid currentPersonId,
+        [FromQuery] Guid currentPersonId,
         CancellationToken ct)
     {
+        EnsureValidDemoPersonId(currentPersonId);
         var result = await _workspaces.CreateWorkSpaceAsync(request, currentPersonId, ct);
 
         return CreatedAtAction(
@@ -36,16 +37,23 @@ public sealed class WorkSpaceController : ControllerBase
     }
 
     [HttpGet("mine")]
-    public async Task<IActionResult> GetMine(Guid currentPersonId, CancellationToken ct)
+    public async Task<IActionResult> GetMine(
+        [FromQuery] Guid currentPersonId,
+        CancellationToken ct)
     {
+        EnsureValidDemoPersonId(currentPersonId);
         var result = await _workspaces.GetMineAsync(currentPersonId, ct);
 
         return Ok(ApiResponseFactory.Base(result, traceId: HttpContext.TraceIdentifier));
     }
 
     [HttpGet("{workspaceId:guid}")]
-    public async Task<IActionResult> GetById(Guid currentPersonId,Guid workspaceId, CancellationToken ct)
+    public async Task<IActionResult> GetById(
+        Guid workspaceId,
+        [FromQuery] Guid currentPersonId,
+        CancellationToken ct)
     {
+        EnsureValidDemoPersonId(currentPersonId);
         var result = await _workspaces.GetAsync(workspaceId, currentPersonId, ct);
 
         return Ok(ApiResponseFactory.Base(result, traceId: HttpContext.TraceIdentifier));
@@ -55,25 +63,34 @@ public sealed class WorkSpaceController : ControllerBase
     public async Task<IActionResult> Update(
         Guid workspaceId,
         [FromBody] WorkspaceService.Request.UpdateWorkSpaceRequest request,
-        Guid currentPersonId, 
+        [FromQuery] Guid currentPersonId,
         CancellationToken ct)
     {
+        EnsureValidDemoPersonId(currentPersonId);
         var result = await _workspaces.UpdateAsync(workspaceId, request, currentPersonId, ct);
 
         return Ok(ApiResponseFactory.Base(result, traceId: HttpContext.TraceIdentifier));
     }
 
     [HttpDelete("{workspaceId:guid}")]
-    public async Task<IActionResult> Delete(Guid currentPersonId,Guid workspaceId, CancellationToken ct)
+    public async Task<IActionResult> Delete(
+        Guid workspaceId,
+        [FromQuery] Guid currentPersonId,
+        CancellationToken ct)
     {
+        EnsureValidDemoPersonId(currentPersonId);
         await _workspaces.DeleteAsync(workspaceId, currentPersonId, ct);
 
         return NoContent();
     }
 
     [HttpGet("{workspaceId:guid}/members")]
-    public async Task<IActionResult> GetMembers(Guid currentPersonId,Guid workspaceId, CancellationToken ct)
+    public async Task<IActionResult> GetMembers(
+        Guid workspaceId,
+        [FromQuery] Guid currentPersonId,
+        CancellationToken ct)
     {
+        EnsureValidDemoPersonId(currentPersonId);
         var result = await _members.GetMembersAsync(workspaceId, currentPersonId, ct);
 
         return Ok(ApiResponseFactory.Base(result, traceId: HttpContext.TraceIdentifier));
@@ -83,10 +100,11 @@ public sealed class WorkSpaceController : ControllerBase
     public async Task<IActionResult> UpdateMemberRole(
         Guid workspaceId,
         Guid personId,
-        Guid currentPersonId,
+        [FromQuery] Guid currentPersonId,
         [FromBody] WorkspaceMemberService.Request.UpdateWorkSpaceMemberRoleRequest request,
         CancellationToken ct)
     {
+        EnsureValidDemoPersonId(currentPersonId);
         var result = await _members.UpdateMemberRoleAsync(
             workspaceId,
             personId,
@@ -101,9 +119,10 @@ public sealed class WorkSpaceController : ControllerBase
     public async Task<IActionResult> RemoveMember(
         Guid workspaceId,
         Guid personId,
-        Guid currentPersonId,
+        [FromQuery] Guid currentPersonId,
         CancellationToken ct)
     {
+        EnsureValidDemoPersonId(currentPersonId);
         await _members.RemoveMemberAsync(workspaceId, personId, currentPersonId, ct);
 
         return NoContent();
@@ -112,10 +131,11 @@ public sealed class WorkSpaceController : ControllerBase
     [HttpPost("{workspaceId:guid}/ownership-transfer")]
     public async Task<IActionResult> TransferOwnership(
         Guid workspaceId,
-        Guid currentPersonId,
+        [FromQuery] Guid currentPersonId,
         [FromBody] WorkspaceMemberService.Request.TransferWorkSpaceOwnershipRequest request,
         CancellationToken ct)
     {
+        EnsureValidDemoPersonId(currentPersonId);
         await _members.TransferOwnershipAsync(
             workspaceId,
             request.NewOwnerPersonId,
@@ -125,5 +145,10 @@ public sealed class WorkSpaceController : ControllerBase
 
         return NoContent();
     }
-    
+
+    private static void EnsureValidDemoPersonId(Guid currentPersonId)
+    {
+        if (currentPersonId == Guid.Empty)
+            throw new DemoPersonUnauthorizedException();
+    }
 }

@@ -2,6 +2,7 @@
 using mini_3_workspace_access_control.Repo;
 using mini_3_workspace_access_control.Repo.Entity;
 using mini_3_workspace_access_control.Repo.Enum;
+using mini_3_workspace_access_control.Service.Exceptions;
 using mini_3_workspace_access_control.Service.Utils;
 
 namespace mini_3_workspace_access_control.Service.WorkSpace;
@@ -24,17 +25,15 @@ public class Service: IService
 
         if (person == null || !person.IsActive)
         {
-            throw new Exception("Person not found or not active");
+            throw new DemoPersonUnauthorizedException();
         }
         
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new BadRequestException("WORKSPACE_NAME_REQUIRED", "Workspace name is required.");
+
         var name = request.Name.Trim();
         var description = string.IsNullOrWhiteSpace(request.Description) 
             ? null : request.Description.Trim();
-
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new Exception("Name is required");
-        }
 
         var workspace = new Workspace()
         {
@@ -63,7 +62,7 @@ public class Service: IService
         catch (DbUpdateException exception)
             when (IsWorkspaceCodeConflict(exception))
         {
-            throw new Exception("Conflict code work space");
+            throw new ConflictException("WORKSPACE_CODE_CONFLICT", "The generated workspace code already exists.");
         }
 
         return new Response.WorkSpaceResponse
@@ -86,7 +85,7 @@ public class Service: IService
 
         if (person == null || !person.IsActive)
         {
-            throw new Exception("Person not found or not active");
+            throw new DemoPersonUnauthorizedException();
         }
         
         return await _dbContext.WorkspaceMembers
@@ -96,7 +95,7 @@ public class Service: IService
             .ThenBy(x => x.Workspace.Id)
             .Select(x => new Response.WorkspaceSummaryResponse
             {
-                Id = x.Id,
+                Id = x.Workspace.Id,
                 Code = x.Workspace.Code,
                 Name = x.Workspace.Name,
                 Description = x.Workspace.Description,
@@ -117,7 +116,7 @@ public class Service: IService
 
         if (person == null || !person.IsActive)
         {
-            throw new Exception("Person not found or not active");
+            throw new DemoPersonUnauthorizedException();
         }
 
         var result = await _dbContext.WorkspaceMembers
@@ -138,7 +137,7 @@ public class Service: IService
             })
             .FirstOrDefaultAsync(ct);
 
-        return result ?? throw new Exception("Workspace not found");
+        return result ?? throw new NotFoundException("WORKSPACE_NOT_FOUND", "Workspace was not found.");
     }
 
     public async Task<Response.WorkSpaceResponse> UpdateAsync(Guid workspaceId, Request.UpdateWorkSpaceRequest request, Guid currentPersonId,
@@ -149,7 +148,7 @@ public class Service: IService
 
         if (person == null || !person.IsActive)
         {
-            throw new Exception("Person not found or not active");
+            throw new DemoPersonUnauthorizedException();
         }
         
         var membership = await _dbContext.WorkspaceMembers
@@ -159,19 +158,17 @@ public class Service: IService
                                      x.PersonId == currentPersonId &&
                                      !x.Workspace.IsDeleted,
                                  ct)
-                         ?? throw new Exception("Workspace not found");
+                         ?? throw new NotFoundException("WORKSPACE_NOT_FOUND", "Workspace was not found.");
 
         if (!membership.Role.Covers(WorkspaceRole.Editor))
         {
-            throw new Exception("You cannot have permission to update workspace membership");
+            throw new ForbiddenException("WORKSPACE_UPDATE_FORBIDDEN", "You do not have permission to update this workspace.");
         }
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new BadRequestException("WORKSPACE_NAME_REQUIRED", "Workspace name is required.");
 
         var name = request.Name.Trim();
-
-        if (string.IsNullOrWhiteSpace(name))
-        {
-           throw new Exception("Name is required");
-        }
 
         membership.Workspace.Name = name;
         membership.Workspace.Description = string.IsNullOrWhiteSpace(request.Description)
@@ -199,7 +196,7 @@ public class Service: IService
 
         if (person == null || !person.IsActive)
         {
-            throw new Exception("Person not found or not active");
+            throw new DemoPersonUnauthorizedException();
         }
 
         var membership = await _dbContext.WorkspaceMembers
@@ -209,17 +206,15 @@ public class Service: IService
                                      x.PersonId == currentPersonId &&
                                      !x.Workspace.IsDeleted,
                                  ct)
-                         ?? throw new Exception("Workspace not found");
+                         ?? throw new NotFoundException("WORKSPACE_NOT_FOUND", "Workspace was not found.");
 
         if (membership.Role != WorkspaceRole.Owner)
         {
-            throw new Exception("You cannot have permission to delete workspace membership");
+            throw new ForbiddenException("WORKSPACE_DELETE_FORBIDDEN", "Only the Owner can delete this workspace.");
         }
 
         membership.Workspace.IsDeleted = true;
-        
         await _dbContext.SaveChangesAsync(ct);
-        
     }
 
 

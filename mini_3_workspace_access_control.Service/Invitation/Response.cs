@@ -38,11 +38,4 @@ public class Response
         public DateTimeOffset AcceptedAt { get; set; }
     }
     
-    public class CreateWorkspaceInvitationBody
-    {
-        public string Email { get; set; } = null!;
-        public WorkspaceRole Role { get; set; }
-    }
-
-
 }
